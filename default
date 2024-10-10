@@ -1,0 +1,53 @@
+	upstream backend1 {
+		server 192.168.7.157:8081;
+	}
+
+	upstream backend2 {
+		server 192.168.7.157:8082;
+	}
+
+	server {
+		listen 80;
+
+		location / {
+			set $backend "";
+
+			# Lua script to get score from IP scoring
+			access_by_lua_block {
+				local http = require "resty.http"
+				local ip_addres = ngx.var.remote.addr
+				local httpc = http.new()
+
+				-- Query the scoring program for the IP address
+				local res, err = httpc:resquest_uri("http://127.0.0.1:5000/score_ip", {
+					method = "GET",
+					query = { ip = ip_address },
+					ssl_verify = false
+				})
+
+				if not res then
+					ngx.log(ngx.ERR, "Failed to query scoring service: ", err)
+					return ngx.exit(500)
+				end
+
+				local cjson = require "cjson"
+				local score_data = cjson.decode(res.body)
+				local ip_score = tonumber(score_data.score)
+
+				-- Route based on the return IP score
+				if ip_score == 1 then
+					ngx.var.backend = "backend1"
+				elseif ip_score == 2 then
+					ngx.var.backend = "backend2"
+				end
+
+			}
+			#Proxy to the selected backend server
+			proxy_pass http://backend;
+			proxy_set_header Host $host;
+			proxy_set_header X-Real-IP $remote_addr;
+			proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+			proxy_set_header X-Forwarded-Proto $scheme;
+			try_files $uri $uri/ =404;
+		}
+	}
