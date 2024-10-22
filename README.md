@@ -1,41 +1,66 @@
 #  Load Load Balancer con Flask y NGINX 
 
 ## Estructura del Proyecto
-NGINX: Actúa como balanceador de carga y enrutador de solicitudes. Utiliza un script en Lua para decidir a qué backend redirigir cada solicitud en función de la puntuación de la IP obtenida de un servicio Flask.
-Flask: Proporciona un servicio REST que calcula una puntuación para cada IP en función de la frecuencia de las solicitudes. La puntuación se utiliza para dirigir las solicitudes a uno de los servidores backend.
-TensorFlow: Un modelo entrenado en TensorFlow (scoring_model.h5) se utiliza para predecir la "puntuación" de una IP basada en la cantidad de solicitudes que realiza en los últimos 60 segundos.
+NGINX/Openresty: Balanceador de carga y enrutador de solicitudes. Utiliza un script en Lua para decidir a qué backend redirigir cada solicitud.
+Flask: Proporciona calculo una puntuación para cada IP basado en su comportamiento.
+TensorFlow: Un modelo entrenado para el analisis de comportamiento y asignacion de puntuacion de cada IP.
 
 ## Requisitos
 Python 3.6+ con las siguientes bibliotecas:
-
 Flask
 TensorFlow
 NumPy
-NGINX con soporte para Lua. Puedes instalar el paquete nginx-extras que incluye soporte para Lua.
 
-Modelo TensorFlow: Debes tener un archivo scoring_model.h5 que haya sido previamente entrenado para predecir las puntuaciones de las IPs.
+NGINX 1.24+
+Openresty 1.27+
+Modelo TensorFlow entrenado
 
 ## Configuración
 1. Configuración de NGINX
-El archivo de configuración de NGINX incluye una sección para cada uno de los servidores backend. Aquí un resumen de las configuraciones claves:
+Upstream: Define los servidores backend y sus puertos que manejarán las solicitudes.
+Codigo con Lua: Codigo en Lua que consulta al servicio Flask para obtener la puntuación de la IP solicitante, y con este redirigir el trafico.
 
-Upstream: Define tres servidores backend (puertos 8081, 8082, y 8083 en la IP 192.168.7.157) que manejarán las solicitudes.
-Lua Script: NGINX utiliza un script en Lua que consulta al servicio Flask (http://127.0.0.1:5000/score_ip) para obtener la puntuación de la IP solicitante. Dependiendo de la puntuación, la solicitud se dirige a uno de los servidores backend.
+2. Configuración de Flask
+El servicio Flask expone un endpoint (/score_ip) que devuelve una puntuación. El sistema utiliza un modelo de TensorFlow para generar esta puntuación.
 
- 2. Configuración de Flask
-El servicio Flask expone un endpoint (/score_ip) que devuelve una puntuación basada en la frecuencia de solicitudes de la IP. El sistema utiliza un modelo de TensorFlow para generar esta puntuación.
 3. Uso del Modelo TensorFlow
-El modelo scoring_model.h5 debe ser un modelo entrenado que pueda predecir la carga basada en la cantidad de solicitudes recibidas en un período corto (en este caso, 60 segundos).
+El modelo scoring_model.h5 se utiliza para analizar el comportamiento de las solicitudes y asignarles una calificacion.
 
-4. Despliegue
-Configurar y ejecutar NGINX con la configuración especificada. Asegúrate de que los servidores backend (8081, 8082, 8083) estén funcionando.
-```python
-python app.py
-```
+4. Funcionamiento
+Cuando una IP hace una solicitud, NGINX consulta el servicio Flask para llamar al modelo tensorflow, asignarle una calificacion y regresarselo al balanceador de cargas. Dependiendo de la puntuación, la solicitud se dirige a uno de los servidores backend.
 
-5. Funcionamiento
-Cuando una IP hace una solicitud, NGINX consulta el servicio Flask para obtener una puntuación basada en la frecuencia de solicitudes de esa IP. Dependiendo de la puntuación, la solicitud se dirige a uno de los servidores backend.
+## Instalacion
+NGINX/Openresty:
+sudo apt update
+sudo apt install nginx
+sudo systemctl disable nginx
+sudo systemctl stop nginx
+sudo apt-get -y install --no-install-recommends wget gnupg ca-certificates lsb-release
+wget -O - https://openresty.org/package/pubkey.gpg | sudo gpg --dearmor -o /usr/share/keyrings/openresty.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/openresty.gpg] http://openresty.org/package/ubuntu $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/openresty.list > /dev/null
+sudo apt-get update
+sudo apt-get -y install openresty
+sudo systemctl enable openresty
+sudo systemctl start openresty
+(Configuration file: /usr/local/openresty/nginx/conf/nginx.conf)
+Para probar funcionamiento:
+sudo openresty -t
+
+Python:
+sudo apt install python3-pip
+Dentro de directorio para python:
+python3 -m venv venv
+. ./venv/bin/activate
+pip install flask
+pip install numpy
+pip install tensorflow
+Para correr el programa:
+python3 pythonipconfig.py
+
 
 Notas
-La configuración actual asume que los servidores backend están en las direcciones IP y puertos especificados. Asegúrate de ajustar esto según tu entorno.
+La configuración actual asume que los servidores backend están en las direcciones IP y puertos especificados.
 El modelo scoring_model.h5 debe ser entrenado previamente y disponible en el directorio donde se ejecuta el servidor Flask.
+Es necesario descargar las librerias y dependencias necesarias.
+El modelo se puede modificar y re-entrenar para satisfacer las necesidades de la red.
+Cada se que modifica el archivo de configuracion de Openresty, se debe de correr el comando: sudo systemctl reload openresty
