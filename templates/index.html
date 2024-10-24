@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+		<meta charset="UTF-8">
+		<meta name="Viewport" content="width=device-width", initial-scale=1.0">
+		<title>Fortify Load Balancer</title>
+<style>
+	body { font-family: Arial, sans-serif; }
+	h1 { color: #333; }
+	.stats { margin-top: 20px; }
+	.stat { margin-bottom: 10px; }
+</style>
+</head>
+<body>
+	<h1>Server Stats</h1>
+	<div class="stats">
+		<div class="stat" id="cpu">CPU Usage: Loading...</div>
+		<div class="stat" id="memory">Memory Usage: Loading...</div>
+		<div class="stat" id="disk">Disk Usage: Loading...</div>
+		<div class="stat" id="nginx">Load Balancer Status: Loading...</div>
+		<pre id="nginx-output" style="white-space: pre-wrap;">Loading...</pre>
+	</div>
+	<script>
+		function fetchStats() {
+			fetch('/stats')
+				.then(response => response.json())
+				.then(data => {
+					document.getElementById('cpu').innerText = `CPU Usage: ${data.cpu_usage}%`;
+					document.getElementById('memory').innerText = `Memory Usage: ${data.memory_usage}%`;
+					document.getElementById('disk').innerText = `Disk Usage: ${data.disk_usage}%`;
+					document.getElementById('nginx').innerText = `Load Balancer Status: `;
+					document.getElementById('nginx-output').innerText = data.nginx_status;
+				})
+				.catch(error => console.error('Error fetching stats: ', error));
+		}
+
+		setInterval(fetchStats, 1000);
+		fetchStats();
+	</script>
+</body>
+</html>
